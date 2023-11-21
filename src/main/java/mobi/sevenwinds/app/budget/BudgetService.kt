@@ -2,28 +2,21 @@ package mobi.sevenwinds.app.budget
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jetbrains.exposed.sql.select
+import mobi.sevenwinds.app.author.AuthorTable
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.joda.time.DateTime
 
 object BudgetService {
-    suspend fun addRecord(body: BudgetRecord): BudgetRecord = withContext(Dispatchers.IO) {
+    suspend fun addRecord(body: BudgetRecordRequest): BudgetRecordResponse = withContext(Dispatchers.IO) {
         transaction {
-            val authorEntity = if (body.author != null) {
-                AuthorEntity.new {
-                    fio = body.author.fio
-                    creationDate = DateTime.now()
-                }
-            } else {
-                null
-            }
-
             val entity = BudgetEntity.new {
                 this.year = body.year
                 this.month = body.month
                 this.amount = body.amount
                 this.type = body.type
-                this.author = authorEntity
+                this.author = body.authorId?.let {
+                    AuthorTable.findAuthorById(it)
+                }
             }
 
             return@transaction entity.toResponse()
@@ -36,7 +29,16 @@ object BudgetService {
                 .select { BudgetTable.year eq param.year }
 
             val query = BudgetTable
-                .select { BudgetTable.year eq param.year }
+                .join(AuthorTable, JoinType.LEFT, additionalConstraint = {
+                    BudgetTable.authorId eq AuthorTable.id
+                })
+                .select {
+                    if (param.authorFio != null) {
+                        (BudgetTable.year eq param.year) and (AuthorTable.fio ilike "%${param.authorFio}%")
+                    } else {
+                        (BudgetTable.year eq param.year)
+                    }
+                }
                 .limit(param.limit, param.offset)
 
             val total = selectAll
@@ -64,4 +66,9 @@ object BudgetService {
             )
         }
     }
+
+    class ILikeOp(expr1: Expression<*>, expr2: Expression<*>) : ComparisonOp(expr1, expr2, "ILIKE")
+
+    infix fun <T : String?> ExpressionWithColumnType<T>.ilike(pattern: String): Op<Boolean> =
+        ILikeOp(this, QueryParameter(pattern, columnType))
 }
