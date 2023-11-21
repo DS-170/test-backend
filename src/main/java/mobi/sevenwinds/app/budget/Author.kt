@@ -7,7 +7,7 @@ import org.jetbrains.exposed.dao.IntIdTable
 import java.sql.Timestamp
 import kotlin.reflect.KProperty
 
-object AuthorTable : IntIdTable("budget") {
+object AuthorTable : IntIdTable("author") {
     val fio = text("fio")
     val creationDate = datetime("creation_date")
 }
@@ -19,6 +19,8 @@ class AuthorEntity(id: EntityID<Int>) : IntEntity(id) {
     var creationDate by AuthorTable.creationDate
 
     fun toResponse(): AuthorRecord {
-        return AuthorRecord(fio, creationDate)
+        val authorRecord = AuthorRecord(fio)
+        authorRecord.creationDate = creationDate
+        return authorRecord
     }
 }

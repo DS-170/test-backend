@@ -4,15 +4,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.joda.time.DateTime
 
 object BudgetService {
     suspend fun addRecord(body: BudgetRecord): BudgetRecord = withContext(Dispatchers.IO) {
         transaction {
+            val authorEntity = if (body.author != null) {
+                AuthorEntity.new {
+                    fio = body.author.fio
+                    creationDate = DateTime.now()
+                }
+            } else {
+                null
+            }
+
             val entity = BudgetEntity.new {
                 this.year = body.year
                 this.month = body.month
                 this.amount = body.amount
                 this.type = body.type
+                this.author = authorEntity
             }
 
             return@transaction entity.toResponse()
@@ -35,9 +46,9 @@ object BudgetService {
                 .map { it.toResponse() }
                 .sortedWith(Comparator { r1, r2 ->
                     val monthResult = r1.month.compareTo(r2.month)
-                    if (monthResult == 0){
+                    if (monthResult == 0) {
                         r2.amount - r1.amount
-                    }else{
+                    } else {
                         monthResult
                     }
                 })
